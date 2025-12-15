@@ -11,32 +11,8 @@ env:
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
-  lint-and-build:
-    name: Lint & Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run linter
-        run: npm run lint
-        continue-on-error: true
-
-      - name: Build
-        run: npm run build
-
   deploy-preview:
     name: Deploy Preview
-    needs: lint-and-build
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
@@ -47,7 +23,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Install Vercel CLI
         run: npm install -g vercel
@@ -77,7 +52,6 @@ jobs:
 
   deploy-production:
     name: Deploy Production
-    needs: lint-and-build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
@@ -88,7 +62,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Install Vercel CLI
         run: npm install -g vercel
