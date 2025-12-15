@@ -1,10 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { LearningPage } from '@/components/educational'
 import { getPageContent } from '@/lib/education-content'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Server, Zap, Shield, Globe } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Loader2, Zap, Clock, Coins } from 'lucide-react'
 
 const content = getPageContent('advanced/providers')!
 
@@ -78,93 +81,141 @@ const myProvider = customProvider({
   },
 ]
 
+const models = [
+  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'Anthropic', badge: 'Recommended' },
+  { id: 'anthropic/claude-haiku', name: 'Claude Haiku', provider: 'Anthropic', badge: 'Fast' },
+  { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI', badge: null },
+  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', badge: 'Budget' },
+  { id: 'google/gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'Google', badge: null },
+  { id: 'google/gemini-1.5-flash', name: 'Gemini 1.5 Flash', provider: 'Google', badge: 'Fast' },
+]
+
 function ProvidersDemo() {
-  const providers = [
-    { name: 'OpenAI', models: 'GPT-4o, GPT-4, GPT-3.5', features: ['Text', 'Vision', 'TTS', 'Embeddings'] },
-    { name: 'Anthropic', models: 'Claude 4, Claude Sonnet', features: ['Text', 'Vision', 'Tools'] },
-    { name: 'Google', models: 'Gemini 1.5 Pro/Flash', features: ['Text', 'Vision', 'Embeddings'] },
-    { name: 'Mistral', models: 'Mistral Large, Codestral', features: ['Text', 'Embeddings'] },
-    { name: 'Cohere', models: 'Command R+', features: ['Text', 'Embeddings', 'Reranking'] },
-    { name: 'Amazon Bedrock', models: 'Multiple providers', features: ['Text', 'Embeddings'] },
-  ]
+  const [selectedModel, setSelectedModel] = useState(models[0].id)
+  const [prompt, setPrompt] = useState('Explain quantum computing in one sentence.')
+  const [result, setResult] = useState<{
+    text: string
+    model: string
+    latencyMs: number
+    usage?: { promptTokens: number; completionTokens: number }
+  } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleGenerate() {
+    if (!prompt.trim()) return
+    setLoading(true)
+    setResult(null)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/provider-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, model: selectedModel }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        setError(data.error)
+      } else {
+        setResult(data)
+      }
+    } catch (err) {
+      setError('Failed to connect to API')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const selectedModelInfo = models.find(m => m.id === selectedModel)
 
   return (
-    <div className="space-y-6">
-      <Card className="p-4 bg-green-500/10 border-green-500/20">
-        <div className="flex items-start gap-3">
-          <Globe className="h-5 w-5 text-green-500 mt-0.5" />
-          <div>
-            <h3 className="font-medium">Provider Architecture</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              AI SDK provides a unified interface across providers. Write code once,
-              switch providers by changing a single line. Use Vercel AI Gateway for
-              simplified multi-provider access with a single API key.
-            </p>
-          </div>
-        </div>
-      </Card>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Badge variant="outline">Model Switcher</Badge>
+        <span className="text-sm text-muted-foreground">
+          Test different models with the same prompt
+        </span>
+      </div>
 
-      <div>
-        <h3 className="font-medium mb-3">Supported Providers</h3>
-        <div className="space-y-2">
-          {providers.map((p) => (
-            <Card key={p.name} className="p-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-xs text-muted-foreground ml-2">{p.models}</span>
-                </div>
-                <div className="flex gap-1">
-                  {p.features.map((f) => (
-                    <Badge key={f} variant="secondary" className="text-xs">{f}</Badge>
-                  ))}
-                </div>
+      {/* Model Selection */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {models.map((model) => (
+          <Card
+            key={model.id}
+            className={`p-3 cursor-pointer transition-all ${
+              selectedModel === model.id
+                ? 'ring-2 ring-primary bg-primary/5'
+                : 'hover:bg-muted/50'
+            }`}
+            onClick={() => setSelectedModel(model.id)}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-sm">{model.name}</div>
+                <div className="text-xs text-muted-foreground">{model.provider}</div>
               </div>
-            </Card>
-          ))}
-        </div>
+              {model.badge && (
+                <Badge variant="secondary" className="text-xs">
+                  {model.badge}
+                </Badge>
+              )}
+            </div>
+          </Card>
+        ))}
       </div>
 
-      <div>
-        <h3 className="font-medium mb-3">Approaches</h3>
-        <div className="grid md:grid-cols-2 gap-4">
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="h-4 w-4 text-primary" />
-              <Badge>AI Gateway</Badge>
-            </div>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Single API key for all providers</li>
-              <li>• Managed by Vercel</li>
-              <li>• Automatic rate limiting</li>
-              <li>• Usage analytics</li>
-            </ul>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Server className="h-4 w-4 text-muted-foreground" />
-              <Badge variant="secondary">Direct Providers</Badge>
-            </div>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Separate API key per provider</li>
-              <li>• Full control over configuration</li>
-              <li>• Direct provider features</li>
-              <li>• Lower latency (no proxy)</li>
-            </ul>
-          </Card>
-        </div>
+      {/* Prompt Input */}
+      <div className="flex gap-2">
+        <Input
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Enter a prompt..."
+          className="flex-1"
+          onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+        />
+        <Button onClick={handleGenerate} disabled={loading || !prompt.trim()}>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+          <span className="ml-2">Generate</span>
+        </Button>
       </div>
 
-      <div>
-        <h3 className="font-medium mb-3">Model ID Format</h3>
-        <Card className="p-4">
-          <div className="font-mono text-sm space-y-1">
-            <div><Badge variant="secondary">gateway</Badge> anthropic/claude-sonnet-4</div>
-            <div><Badge variant="secondary">direct</Badge> claude-sonnet-4-20250514</div>
-            <div><Badge variant="secondary">registry</Badge> anthropic:claude-sonnet-4</div>
+      {/* Result */}
+      {result && (
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge>{selectedModelInfo?.provider}</Badge>
+            <Badge variant="secondary">{selectedModelInfo?.name}</Badge>
+          </div>
+          <p className="text-sm">{result.text}</p>
+          <div className="flex gap-4 text-xs text-muted-foreground border-t pt-3">
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {result.latencyMs}ms
+            </span>
+            {result.usage && (
+              <span className="flex items-center gap-1">
+                <Coins className="h-3 w-3" />
+                {result.usage.promptTokens + result.usage.completionTokens} tokens
+              </span>
+            )}
           </div>
         </Card>
-      </div>
+      )}
+
+      {error && (
+        <Card className="p-4 bg-destructive/10 border-destructive/20">
+          <p className="text-sm text-destructive">{error}</p>
+        </Card>
+      )}
+
+      {!result && !error && !loading && (
+        <Card className="p-8 text-center text-muted-foreground">
+          <Zap className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="font-medium">Select a model and generate</p>
+          <p className="text-sm">Compare responses across different providers</p>
+        </Card>
+      )}
     </div>
   )
 }

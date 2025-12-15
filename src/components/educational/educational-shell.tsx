@@ -1,9 +1,10 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SidebarTrigger } from '@/components/ui/sidebar'
+import { Separator } from '@/components/ui/separator'
 import { ExternalLink, BookOpen } from 'lucide-react'
 
 interface EducationalShellProps {
@@ -22,33 +23,33 @@ export function EducationalShell({
   children,
 }: EducationalShellProps) {
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] p-4 gap-4">
-      {/* Header Card */}
-      <Card className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{title}</h1>
-              <Badge variant="secondary">{category}</Badge>
-            </div>
-            <p className="text-muted-foreground">{subtitle}</p>
+    <>
+      {/* Header */}
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="h-6" />
+        <div className="flex flex-1 items-center justify-between gap-4 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-lg font-semibold truncate">{title}</h1>
+            <Badge variant="secondary" className="shrink-0">{category}</Badge>
+            <span className="text-sm text-muted-foreground truncate hidden md:inline">{subtitle}</span>
           </div>
           {docsUrl && (
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="ghost" size="sm" asChild className="shrink-0">
               <a href={docsUrl} target="_blank" rel="noopener noreferrer">
                 <BookOpen className="h-4 w-4 mr-2" />
-                Docs
+                <span className="hidden sm:inline">Docs</span>
                 <ExternalLink className="h-3 w-3 ml-1" />
               </a>
             </Button>
           )}
         </div>
-      </Card>
+      </header>
 
       {/* Main Content */}
-      <Card className="flex-1 flex flex-col overflow-hidden p-4">
+      <main className="flex-1 flex flex-col min-h-0 p-4">
         {children}
-      </Card>
-    </div>
+      </main>
+    </>
   )
 }

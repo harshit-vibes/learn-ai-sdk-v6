@@ -64,6 +64,116 @@ sendMessage({ text: 'Hello!' })`,
     ],
   },
 
+  'ui/completion': {
+    title: 'useCompletion',
+    subtitle: 'Single-prompt text completion with streaming support',
+    category: 'AI SDK UI',
+    docsUrl: 'https://v6.ai-sdk.dev/docs/ai-sdk-ui/completion',
+    infoBar: {
+      whatIs: 'useCompletion is a React hook for single-prompt text generation. Unlike useChat which maintains conversation history, useCompletion is stateless - each request is independent.',
+      whenToUse: [
+        'Text completion tasks (story continuation, code completion)',
+        'Single-shot generation without conversation context',
+        'Form-based generation interfaces',
+        'When you need simple prompt → response flow',
+      ],
+      keyConcepts: [
+        { term: 'completion', definition: 'The generated text, updated in real-time as it streams' },
+        { term: 'handleSubmit', definition: 'Form handler that sends the input to the API' },
+        { term: 'prompt', definition: 'Server receives { prompt } instead of messages array' },
+        { term: 'toTextStreamResponse', definition: 'Server returns plain text stream, not UI messages' },
+      ],
+      codeExample: `const { completion, input, handleSubmit } = useCompletion({
+  api: '/api/completion'
+})
+
+// In form: onSubmit={handleSubmit}`,
+    },
+    apiReference: [
+      { name: 'completion', type: 'string', description: 'The current completion text, updated as it streams' },
+      { name: 'input', type: 'string', description: 'The current input value' },
+      { name: 'setInput', type: '(input) => void', description: 'Update the input value' },
+      { name: 'handleSubmit', type: '(e) => void', description: 'Form submit handler that triggers completion' },
+      { name: 'isLoading', type: 'boolean', description: 'Whether a completion is currently streaming' },
+      { name: 'stop', type: '() => void', description: 'Stop the current streaming response' },
+      { name: 'api', type: 'string', required: true, description: 'The API endpoint for completions' },
+    ],
+  },
+
+  'ui/object': {
+    title: 'useObject',
+    subtitle: 'Stream structured JSON objects with Zod schema validation',
+    category: 'AI SDK UI',
+    docsUrl: 'https://v6.ai-sdk.dev/docs/ai-sdk-ui/object-generation',
+    infoBar: {
+      whatIs: 'useObject is a React hook that generates structured data matching a Zod schema. The object streams progressively, allowing you to display partial data as it generates.',
+      whenToUse: [
+        'Generating structured data (profiles, recipes, products)',
+        'Form auto-fill from natural language',
+        'Data extraction from unstructured text',
+        'When you need type-safe generated objects',
+      ],
+      keyConcepts: [
+        { term: 'schema', definition: 'Zod schema that defines and validates the output structure' },
+        { term: 'object', definition: 'The generated object, partially populated during streaming' },
+        { term: 'submit', definition: 'Function to trigger generation with a prompt' },
+        { term: 'streaming', definition: 'Object fields populate progressively as they generate' },
+      ],
+      codeExample: `const schema = z.object({
+  name: z.string(),
+  age: z.number(),
+})
+
+const { object, submit } = useObject({
+  api: '/api/object',
+  schema,
+})
+
+submit({ prompt: 'A software engineer' })`,
+    },
+    apiReference: [
+      { name: 'object', type: 'T | undefined', description: 'The generated object (partial during streaming)' },
+      { name: 'submit', type: '(input) => void', description: 'Trigger generation: submit({ prompt: "..." })' },
+      { name: 'isLoading', type: 'boolean', description: 'Whether generation is in progress' },
+      { name: 'error', type: 'Error | undefined', description: 'Error object if generation failed' },
+      { name: 'stop', type: '() => void', description: 'Stop the current generation' },
+      { name: 'schema', type: 'ZodSchema', required: true, description: 'Zod schema defining the object structure' },
+    ],
+  },
+
+  'ui/streams': {
+    title: 'Stream Utilities',
+    subtitle: 'Low-level utilities for custom stream management and message handling',
+    category: 'AI SDK UI',
+    docsUrl: 'https://v6.ai-sdk.dev/docs/ai-sdk-ui/streaming',
+    infoBar: {
+      whatIs: 'Stream utilities provide low-level control over UI message streams. While useChat and useCompletion handle streaming automatically, these utilities let you build custom streaming experiences.',
+      whenToUse: [
+        'Building custom streaming UI without useChat',
+        'Processing streams outside React (vanilla JS, other frameworks)',
+        'Managing token limits in long conversations',
+        'Creating custom stream formats or transformations',
+      ],
+      keyConcepts: [
+        { term: 'UIMessageStream', definition: 'A ReadableStream containing structured UI events (text, tool calls, etc.)' },
+        { term: 'writer', definition: 'Interface for writing events to the stream (writeText, writeToolCall, etc.)' },
+        { term: 'pruning', definition: 'Removing old messages to fit within model token limits' },
+        { term: 'streaming events', definition: 'text, tool-call, tool-result, finish, error' },
+      ],
+      codeExample: `const stream = createUIMessageStream({
+  execute: async (writer) => {
+    writer.writeText('Hello!')
+  }
+})`,
+    },
+    apiReference: [
+      { name: 'createUIMessageStream', type: '(options) => ReadableStream', description: 'Creates a stream with execute callback for writing events' },
+      { name: 'createUIMessageStreamResponse', type: '(options) => Response', description: 'Wraps a stream in a Response with correct headers' },
+      { name: 'readUIMessageStream', type: '(response) => AsyncIterable', description: 'Reads and parses stream events from a Response' },
+      { name: 'pruneMessages', type: '(messages, options) => UIMessage[]', description: 'Prunes messages to fit maxTokens limit' },
+    ],
+  },
+
   // Text Generation
   'text/generate': {
     title: 'generateText',

@@ -1,14 +1,21 @@
 'use client'
 
 import { useCompletion } from '@ai-sdk/react'
-import { EducationalShell, InfoBar, CodeBlock, ApiReference, DemoCard } from '@/components/educational'
+import { LearningPage } from '@/components/educational'
+import { getPageContent } from '@/lib/education-content'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Loader2 } from 'lucide-react'
 
-const clientCode = `'use client'
+const content = getPageContent('ui/completion')!
+
+const codeExamples = [
+  {
+    title: 'Client Component',
+    language: 'tsx',
+    code: `'use client'
 
 import { useCompletion } from '@ai-sdk/react'
 
@@ -38,9 +45,12 @@ export function CompletionDemo() {
       <div>{completion}</div>
     </form>
   )
-}`
-
-const serverCode = `// app/api/completion/route.ts
+}`,
+  },
+  {
+    title: 'API Route',
+    language: 'typescript',
+    code: `// app/api/completion/route.ts
 import { streamText } from 'ai'
 import { createGateway } from 'ai'
 
@@ -57,21 +67,33 @@ export async function POST(req: Request) {
   })
 
   return result.toTextStreamResponse()
-}`
-
-const apiItems = [
-  { name: 'completion', type: 'string', description: 'The current completion text, updated as it streams' },
-  { name: 'input', type: 'string', description: 'The current input value' },
-  { name: 'setInput', type: '(input) => void', description: 'Update the input value' },
-  { name: 'handleSubmit', type: '(e) => void', description: 'Form submit handler that triggers completion' },
-  { name: 'isLoading', type: 'boolean', description: 'Whether a completion is currently streaming' },
-  { name: 'stop', type: '() => void', description: 'Stop the current streaming response' },
-  { name: 'setCompletion', type: '(text) => void', description: 'Manually set the completion text' },
-  { name: 'error', type: 'Error | undefined', description: 'Error object if an error occurred' },
-  { name: 'api', type: 'string', required: true, description: 'The API endpoint for completions' },
+}`,
+  },
+  {
+    title: 'With Body',
+    language: 'tsx',
+    code: `// Send additional data with the request
+const { completion, handleSubmit } = useCompletion({
+  api: '/api/completion',
+  body: {
+    temperature: 0.7,
+    maxTokens: 500,
+  },
+})`,
+  },
+  {
+    title: 'With Headers',
+    language: 'tsx',
+    code: `const { completion, handleSubmit } = useCompletion({
+  api: '/api/completion',
+  headers: {
+    'X-Custom-Header': 'custom-value',
+  },
+})`,
+  },
 ]
 
-export default function UseCompletionPage() {
+function CompletionDemo() {
   const {
     completion,
     input,
@@ -85,94 +107,59 @@ export default function UseCompletionPage() {
   })
 
   return (
-    <EducationalShell
-      title="useCompletion"
-      subtitle="Single-prompt text completion with streaming support"
-      category="AI SDK UI"
-      docsUrl="https://v6.ai-sdk.dev/docs/ai-sdk-ui/completion"
-    >
-      <InfoBar
-        whatIs="useCompletion is a React hook for single-prompt text generation. Unlike useChat which maintains conversation history, useCompletion is stateless - each request is independent."
-        whenToUse={[
-          'Text completion tasks (story continuation, code completion)',
-          'Single-shot generation without conversation context',
-          'Form-based generation interfaces',
-          'When you need simple prompt → response flow',
-        ]}
-        keyConcepts={[
-          { term: 'completion', definition: 'The generated text, updated in real-time as it streams' },
-          { term: 'handleSubmit', definition: 'Form handler that sends the input to the API' },
-          { term: 'prompt', definition: 'Server receives { prompt } instead of messages array' },
-          { term: 'toTextStreamResponse', definition: 'Server returns plain text stream, not UI messages' },
-        ]}
-        codeExample={`const { completion, input, handleSubmit } = useCompletion({
-  api: '/api/completion'
-})
-
-// In form: onSubmit={handleSubmit}`}
-      />
-
-      <DemoCard
-        code={
-          <div className="space-y-4">
-            <CodeBlock code={clientCode} title="Client Component" language="tsx" />
-            <CodeBlock code={serverCode} title="API Route" language="typescript" />
-          </div>
-        }
-      >
-        {/* Status */}
-        <div className="flex items-center gap-2 mb-4">
-          <Badge variant={isLoading ? 'default' : 'secondary'}>
-            {isLoading ? 'Streaming' : 'Ready'}
-          </Badge>
-          {isLoading && (
-            <Button variant="outline" size="sm" onClick={stop}>
-              Stop
-            </Button>
-          )}
-          {completion && (
-            <Button variant="outline" size="sm" onClick={() => setCompletion('')}>
-              Clear
-            </Button>
-          )}
-        </div>
-
-        {/* Input Form */}
-        <form onSubmit={handleSubmit} className="flex gap-2 mb-4">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Write a haiku about programming..."
-            disabled={isLoading}
-            className="flex-1"
-          />
-          <Button type="submit" disabled={isLoading || !input.trim()}>
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Generating
-              </>
-            ) : (
-              'Generate'
-            )}
+    <div className="flex flex-col h-full space-y-4">
+      {/* Status */}
+      <div className="flex items-center gap-2">
+        <Badge variant={isLoading ? 'default' : 'secondary'}>
+          {isLoading ? 'Streaming' : 'Ready'}
+        </Badge>
+        {isLoading && (
+          <Button variant="outline" size="sm" onClick={stop}>
+            Stop
           </Button>
-        </form>
-
-        {/* Output */}
-        <ScrollArea className="flex-1 border rounded-lg p-4 bg-muted/30">
-          {completion ? (
-            <div className="whitespace-pre-wrap">{completion}</div>
-          ) : (
-            <p className="text-muted-foreground text-center py-8">
-              Enter a prompt to generate text
-            </p>
-          )}
-        </ScrollArea>
-      </DemoCard>
-
-      <div className="mt-4">
-        <ApiReference items={apiItems} />
+        )}
+        {completion && (
+          <Button variant="outline" size="sm" onClick={() => setCompletion('')}>
+            Clear
+          </Button>
+        )}
       </div>
-    </EducationalShell>
+
+      {/* Input Form */}
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Write a haiku about programming..."
+          disabled={isLoading}
+          className="flex-1"
+        />
+        <Button type="submit" disabled={isLoading || !input.trim()}>
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Generating
+            </>
+          ) : (
+            'Generate'
+          )}
+        </Button>
+      </form>
+
+      {/* Output */}
+      <ScrollArea className="flex-1 border rounded-lg p-4 bg-muted/30">
+        {completion ? (
+          <div className="whitespace-pre-wrap">{completion}</div>
+        ) : (
+          <p className="text-muted-foreground text-center py-8">
+            Enter a prompt to generate text
+          </p>
+        )}
+      </ScrollArea>
+    </div>
   )
+}
+
+export default function UseCompletionPage() {
+  return <LearningPage content={content} demo={<CompletionDemo />} codeExamples={codeExamples} />
 }

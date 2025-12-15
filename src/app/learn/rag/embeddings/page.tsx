@@ -1,10 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { LearningPage } from '@/components/educational'
 import { getPageContent } from '@/lib/education-content'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Hash, AlertCircle, ArrowRight } from 'lucide-react'
+import { Loader2, ArrowLeftRight, Sparkles } from 'lucide-react'
 
 const content = getPageContent('rag/embeddings')!
 
@@ -84,79 +87,146 @@ const { text } = await generateText({
 ]
 
 function EmbeddingsDemo() {
-  const providers = [
-    { name: 'OpenAI', models: 'text-embedding-3-small/large, ada-002', dims: '1536-3072' },
-    { name: 'Google', models: 'text-embedding-004, gemini-embedding', dims: '768-3072' },
-    { name: 'Cohere', models: 'embed-v3.0, embed-multilingual', dims: '1024' },
-    { name: 'Mistral', models: 'mistral-embed', dims: '1024' },
-    { name: 'Voyage', models: 'voyage-2, voyage-code-2', dims: '1024-1536' },
+  const [text1, setText1] = useState('Machine learning is a type of artificial intelligence that allows computers to learn from data.')
+  const [text2, setText2] = useState('AI systems can improve their performance by analyzing patterns in large datasets.')
+  const [result, setResult] = useState<{ similarity: number; interpretation: string; dimensions: number } | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const compareSamples = [
+    { label: 'Similar', t1: 'The cat sat on the mat', t2: 'A feline was resting on the rug' },
+    { label: 'Different', t1: 'The weather is sunny today', t2: 'Python is a programming language' },
+    { label: 'Related', t1: 'I love pizza', t2: 'Italian food is delicious' },
   ]
 
+  async function handleCompare() {
+    if (!text1.trim() || !text2.trim()) return
+    setLoading(true)
+    setResult(null)
+
+    try {
+      const res = await fetch('/api/embeddings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text1, text2 }),
+      })
+      const data = await res.json()
+      setResult(data)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getSimilarityColor = (score: number) => {
+    if (score > 0.7) return 'text-green-500'
+    if (score > 0.4) return 'text-yellow-500'
+    return 'text-red-500'
+  }
+
   return (
-    <div className="space-y-6">
-      <Card className="p-4 bg-blue-500/10 border-blue-500/20">
-        <div className="flex items-start gap-3">
-          <Hash className="h-5 w-5 text-blue-500 mt-0.5" />
-          <div>
-            <h3 className="font-medium">What are Embeddings?</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Embeddings convert text into numerical vectors that capture semantic meaning.
-              Similar texts have vectors that are close together in the embedding space,
-              enabling semantic search and similarity comparisons.
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Badge variant="outline">Semantic Similarity Calculator</Badge>
+        {compareSamples.map((sample) => (
+          <Button
+            key={sample.label}
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setText1(sample.t1)
+              setText2(sample.t2)
+              setResult(null)
+            }}
+          >
+            Try: {sample.label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Text 1</label>
+          <Textarea
+            value={text1}
+            onChange={(e) => { setText1(e.target.value); setResult(null) }}
+            placeholder="Enter first text..."
+            rows={4}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Text 2</label>
+          <Textarea
+            value={text2}
+            onChange={(e) => { setText2(e.target.value); setResult(null) }}
+            placeholder="Enter second text..."
+            rows={4}
+          />
+        </div>
+      </div>
+
+      <Button
+        onClick={handleCompare}
+        disabled={loading || !text1.trim() || !text2.trim()}
+        className="w-full"
+      >
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+        ) : (
+          <ArrowLeftRight className="h-4 w-4 mr-2" />
+        )}
+        Compare Semantic Similarity
+      </Button>
+
+      {result && (
+        <Card className="p-6">
+          <div className="text-center space-y-4">
+            <div>
+              <div className={`text-5xl font-bold ${getSimilarityColor(result.similarity)}`}>
+                {Math.round(result.similarity * 100)}%
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">Similarity Score</div>
+            </div>
+
+            <div className="flex justify-center">
+              <Badge variant="secondary" className="text-lg px-4 py-1">
+                {result.interpretation}
+              </Badge>
+            </div>
+
+            {/* Visual similarity bar */}
+            <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+              <div
+                className={`h-full transition-all duration-500 ${
+                  result.similarity > 0.7 ? 'bg-green-500' :
+                  result.similarity > 0.4 ? 'bg-yellow-500' : 'bg-red-500'
+                }`}
+                style={{ width: `${result.similarity * 100}%` }}
+              />
+            </div>
+
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Different</span>
+              <span>Related</span>
+              <span>Similar</span>
+              <span>Identical</span>
+            </div>
+
+            <p className="text-xs text-muted-foreground border-t pt-4">
+              Embeddings converted to {result.dimensions}-dimensional vectors and compared using cosine similarity.
+              In production, use OpenAI&apos;s text-embedding-3-small (1536 dims) or similar models.
             </p>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
-      <div>
-        <h3 className="font-medium mb-3">Embedding Providers</h3>
-        <div className="space-y-2">
-          {providers.map((p) => (
-            <Card key={p.name} className="p-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-medium text-sm">{p.name}</span>
-                  <span className="text-xs text-muted-foreground ml-2">{p.models}</span>
-                </div>
-                <Badge variant="secondary">{p.dims} dims</Badge>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="font-medium mb-3">RAG Flow</h3>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge>Query</Badge>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          <Badge variant="secondary">Embed</Badge>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          <Badge variant="secondary">Vector Search</Badge>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          <Badge variant="secondary">Retrieve Docs</Badge>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-          <Badge>Generate</Badge>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="font-medium mb-3">Key Functions</h3>
-        <div className="grid md:grid-cols-3 gap-4">
-          <Card className="p-4">
-            <code className="text-primary">embed()</code>
-            <p className="text-xs text-muted-foreground mt-1">Embed a single text value</p>
-          </Card>
-          <Card className="p-4">
-            <code className="text-primary">embedMany()</code>
-            <p className="text-xs text-muted-foreground mt-1">Batch embed multiple values</p>
-          </Card>
-          <Card className="p-4">
-            <code className="text-primary">cosineSimilarity()</code>
-            <p className="text-xs text-muted-foreground mt-1">Compare two embeddings</p>
-          </Card>
-        </div>
-      </div>
+      {!result && !loading && (
+        <Card className="p-8 text-center text-muted-foreground">
+          <Sparkles className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="font-medium">Enter two texts and click Compare</p>
+          <p className="text-sm">See how semantically similar they are</p>
+        </Card>
+      )}
     </div>
   )
 }

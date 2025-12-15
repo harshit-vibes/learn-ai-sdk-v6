@@ -1,5 +1,10 @@
+'use client'
+
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { SidebarTrigger } from '@/components/ui/sidebar'
+import { Separator } from '@/components/ui/separator'
 import Link from 'next/link'
 import {
   MessageSquare,
@@ -11,188 +16,211 @@ import {
   Settings,
   TestTube,
   ExternalLink,
+  ChevronRight,
   Sparkles,
+  Zap,
+  BookOpen,
 } from 'lucide-react'
 
-const sections = [
+const curriculum = [
   {
-    title: 'AI SDK UI',
-    description: 'React hooks for building chat interfaces',
+    section: 'AI SDK UI',
+    description: 'React hooks for chat interfaces',
     icon: MessageSquare,
-    href: '/learn/ui/chat',
-    color: 'bg-blue-500',
+    gradient: 'from-blue-500 to-blue-600',
+    pages: [
+      { num: 1, title: 'useChat', href: '/learn/ui/chat' },
+      { num: 2, title: 'useCompletion', href: '/learn/ui/completion' },
+      { num: 3, title: 'useObject', href: '/learn/ui/object' },
+      { num: 4, title: 'Stream Utilities', href: '/learn/ui/streams' },
+    ],
   },
   {
-    title: 'Text Generation',
-    description: 'Generate and stream text with LLMs',
+    section: 'Text Generation',
+    description: 'Generate and stream text',
     icon: FileText,
-    href: '/learn/text/generate',
-    color: 'bg-green-500',
+    gradient: 'from-emerald-500 to-emerald-600',
+    pages: [
+      { num: 5, title: 'generateText', href: '/learn/text/generate' },
+      { num: 6, title: 'streamText', href: '/learn/text/stream' },
+      { num: 7, title: 'Prompt Engineering', href: '/learn/text/prompts' },
+    ],
   },
   {
-    title: 'Structured Data',
-    description: 'Generate typed objects with schemas',
+    section: 'Structured Data',
+    description: 'Type-safe object generation',
     icon: Package,
-    href: '/learn/structured/generate',
-    color: 'bg-purple-500',
+    gradient: 'from-violet-500 to-violet-600',
+    pages: [
+      { num: 8, title: 'generateObject', href: '/learn/structured/generate' },
+      { num: 9, title: 'streamObject', href: '/learn/structured/stream' },
+    ],
   },
   {
-    title: 'Tool Calling',
-    description: 'Enable AI to use external tools',
+    section: 'Tool Calling',
+    description: 'AI-powered tool execution',
     icon: Wrench,
-    href: '/learn/tools/basic',
-    color: 'bg-orange-500',
+    gradient: 'from-orange-500 to-orange-600',
+    pages: [
+      { num: 10, title: 'Basic Tools', href: '/learn/tools/basic' },
+      { num: 11, title: 'Multi-step Agents', href: '/learn/tools/agents' },
+      { num: 12, title: 'MCP Integration', href: '/learn/tools/mcp' },
+    ],
   },
   {
-    title: 'Multimodal',
-    description: 'Vision, image gen, speech & transcription',
+    section: 'Multimodal',
+    description: 'Vision, audio & images',
     icon: Image,
-    href: '/learn/multimodal/vision',
-    color: 'bg-pink-500',
+    gradient: 'from-pink-500 to-pink-600',
+    pages: [
+      { num: 13, title: 'Vision', href: '/learn/multimodal/vision' },
+      { num: 14, title: 'Image Generation', href: '/learn/multimodal/image' },
+      { num: 15, title: 'Transcription', href: '/learn/multimodal/transcription' },
+      { num: 16, title: 'Speech', href: '/learn/multimodal/speech' },
+    ],
   },
   {
-    title: 'RAG & Search',
-    description: 'Embeddings and semantic search',
+    section: 'RAG & Search',
+    description: 'Embeddings & semantic search',
     icon: Hash,
-    href: '/learn/rag/embeddings',
-    color: 'bg-cyan-500',
+    gradient: 'from-cyan-500 to-cyan-600',
+    pages: [
+      { num: 17, title: 'Embeddings', href: '/learn/rag/embeddings' },
+      { num: 18, title: 'Reranking', href: '/learn/rag/reranking' },
+    ],
   },
   {
-    title: 'Advanced',
-    description: 'Settings, middleware & providers',
+    section: 'Advanced',
+    description: 'Settings & middleware',
     icon: Settings,
-    href: '/learn/advanced/settings',
-    color: 'bg-slate-500',
+    gradient: 'from-slate-500 to-slate-600',
+    pages: [
+      { num: 19, title: 'Model Settings', href: '/learn/advanced/settings' },
+      { num: 20, title: 'Middleware', href: '/learn/advanced/middleware' },
+      { num: 21, title: 'Providers', href: '/learn/advanced/providers' },
+      { num: 22, title: 'Error Handling', href: '/learn/advanced/errors' },
+    ],
   },
   {
-    title: 'Development',
-    description: 'Testing, telemetry & devtools',
+    section: 'Development',
+    description: 'Testing & debugging',
     icon: TestTube,
-    href: '/learn/dev/testing',
-    color: 'bg-amber-500',
+    gradient: 'from-amber-500 to-amber-600',
+    pages: [
+      { num: 23, title: 'Testing', href: '/learn/dev/testing' },
+      { num: 24, title: 'Telemetry', href: '/learn/dev/telemetry' },
+      { num: 25, title: 'DevTools', href: '/learn/dev/devtools' },
+    ],
   },
 ]
 
 export default function OverviewPage() {
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
-      {/* Hero Section */}
-      <div className="text-center space-y-4 py-8">
-        <div className="flex justify-center">
-          <div className="p-4 rounded-2xl bg-primary/10">
-            <Sparkles className="h-12 w-12 text-primary" />
+    <>
+      {/* Header */}
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="h-6" />
+        <div className="flex flex-1 items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <span className="font-semibold">AI SDK v6</span>
+            <Badge variant="secondary">Learning Hub</Badge>
           </div>
+          <a
+            href="https://v6.ai-sdk.dev/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+          >
+            Docs <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
-        <h1 className="text-4xl font-bold">AI SDK v6 Learning Hub</h1>
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          An interactive guide to building AI-powered applications with Vercel AI SDK.
-          Explore features, run demos, and learn by doing.
-        </p>
-        <div className="flex justify-center gap-2">
-          <Badge variant="secondary">ai@6.0.0-beta</Badge>
-          <Badge variant="secondary">@ai-sdk/react@3.0.0-beta</Badge>
-        </div>
-      </div>
+      </header>
 
-      {/* Quick Links */}
-      <div className="flex justify-center gap-4 text-sm">
-        <a
-          href="https://v6.ai-sdk.dev/docs"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
-        >
-          Official Docs <ExternalLink className="h-3 w-3" />
-        </a>
-        <a
-          href="https://github.com/vercel/ai"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
-        >
-          GitHub <ExternalLink className="h-3 w-3" />
-        </a>
-      </div>
-
-      {/* Section Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {sections.map((section) => (
-          <Link key={section.title} href={section.href}>
-            <Card className="p-4 h-full hover:border-primary/50 transition-colors cursor-pointer">
-              <div className="space-y-3">
-                <div className={`w-10 h-10 rounded-lg ${section.color} flex items-center justify-center`}>
-                  <section.icon className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">{section.title}</h3>
-                  <p className="text-sm text-muted-foreground">{section.description}</p>
-                </div>
-              </div>
-            </Card>
-          </Link>
-        ))}
-      </div>
-
-      {/* Architecture Overview */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">SDK Architecture</h2>
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="space-y-3">
-            <h3 className="font-medium flex items-center gap-2">
-              <Badge>AI SDK Core</Badge>
-              Server-side
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Core functions for interacting with LLMs. Use <code className="text-primary">generateText</code>,{' '}
-              <code className="text-primary">streamText</code>, <code className="text-primary">generateObject</code>,
-              and more in your API routes and server actions.
+      {/* Main Content */}
+      <main className="flex-1 overflow-auto">
+        {/* Hero */}
+        <div className="bg-gradient-to-b from-primary/5 to-transparent px-6 py-10">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+              <Zap className="h-4 w-4" />
+              25 Interactive Lessons
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold mb-3">
+              Master the Vercel AI SDK
+            </h1>
+            <p className="text-muted-foreground max-w-2xl mx-auto mb-6">
+              Learn streaming, tool calling, structured generation, and more through
+              hands-on demos and real code examples.
             </p>
-            <ul className="text-sm space-y-1 text-muted-foreground">
-              <li>• Text & object generation</li>
-              <li>• Tool calling & agents</li>
-              <li>• Embeddings & RAG</li>
-              <li>• Multimodal (vision, speech)</li>
-            </ul>
-          </div>
-          <div className="space-y-3">
-            <h3 className="font-medium flex items-center gap-2">
-              <Badge>AI SDK UI</Badge>
-              Client-side
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              React hooks for building interactive AI interfaces. Handle streaming,
-              state management, and UI updates automatically with{' '}
-              <code className="text-primary">useChat</code>, <code className="text-primary">useCompletion</code>,
-              and <code className="text-primary">useObject</code>.
-            </p>
-            <ul className="text-sm space-y-1 text-muted-foreground">
-              <li>• Real-time streaming</li>
-              <li>• Message state management</li>
-              <li>• Error handling</li>
-              <li>• Framework agnostic</li>
-            </ul>
+            <div className="flex items-center justify-center gap-3">
+              <Button asChild size="lg">
+                <Link href="/learn/ui/chat">
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Start Learning
+                </Link>
+              </Button>
+              <Button variant="outline" size="lg" asChild>
+                <a href="https://github.com/vercel/ai" target="_blank" rel="noopener noreferrer">
+                  GitHub
+                  <ExternalLink className="h-4 w-4 ml-2" />
+                </a>
+              </Button>
+            </div>
           </div>
         </div>
-      </Card>
 
-      {/* Provider Info */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">This Learning Hub Uses</h2>
-        <div className="flex flex-wrap gap-4">
-          <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg">
-            <span className="font-medium">Provider:</span>
-            <span className="text-muted-foreground">Vercel AI Gateway</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg">
-            <span className="font-medium">Model:</span>
-            <span className="text-muted-foreground">anthropic/claude-sonnet-4</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg">
-            <span className="font-medium">Framework:</span>
-            <span className="text-muted-foreground">Next.js 16 + React 19</span>
+        {/* Curriculum */}
+        <div className="px-6 py-8 max-w-6xl mx-auto">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {curriculum.map((section) => (
+              <Card key={section.section} className="overflow-hidden">
+                {/* Section Header */}
+                <div className={`bg-gradient-to-r ${section.gradient} px-3 py-2`}>
+                  <div className="flex items-center gap-2">
+                    <section.icon className="h-4 w-4 text-white" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-white text-sm">{section.section}</h3>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pages */}
+                <div className="p-1">
+                  {section.pages.map((page) => (
+                    <Link
+                      key={page.href}
+                      href={page.href}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted transition-colors group"
+                    >
+                      <span className="w-5 h-5 rounded bg-muted flex items-center justify-center text-xs font-mono text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                        {page.num}
+                      </span>
+                      <span className="text-sm group-hover:text-primary transition-colors">
+                        {page.title}
+                      </span>
+                      <ChevronRight className="h-3 w-3 ml-auto text-muted-foreground/30 group-hover:text-primary transition-colors" />
+                    </Link>
+                  ))}
+                </div>
+              </Card>
+            ))}
           </div>
         </div>
-      </Card>
-    </div>
+
+        {/* Footer */}
+        <div className="border-t px-6 py-4">
+          <div className="max-w-6xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
+            <div className="flex items-center gap-4">
+              <span>Powered by <strong className="text-foreground">Vercel AI Gateway</strong></span>
+              <span className="hidden sm:inline">•</span>
+              <span className="hidden sm:inline">claude-sonnet-4</span>
+            </div>
+            <span>Next.js 16 + React 19</span>
+          </div>
+        </div>
+      </main>
+    </>
   )
 }

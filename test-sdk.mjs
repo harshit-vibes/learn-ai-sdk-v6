@@ -5,7 +5,7 @@ import { z } from 'zod';
 // Use standard OpenAI SDK configured for OpenRouter with compatibility mode
 const openrouter = createOpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: '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',
+  apiKey: process.env.OPENROUTER_API_KEY,
   compatibility: 'compatible',
 });
 

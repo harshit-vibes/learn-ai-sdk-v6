@@ -7,12 +7,20 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   BookOpen,
   MessageSquare,
@@ -41,17 +49,33 @@ import {
   Activity,
   Terminal,
   Sparkles,
+  ChevronRight,
+  type LucideIcon,
 } from 'lucide-react'
 
-const navigation = [
+interface NavItem {
+  title: string
+  href: string
+  icon: LucideIcon
+}
+
+interface NavSection {
+  title: string
+  icon: LucideIcon
+  items: NavItem[]
+}
+
+const navigation: NavSection[] = [
   {
     title: 'Getting Started',
+    icon: BookOpen,
     items: [
       { title: 'Overview', href: '/learn/overview', icon: BookOpen },
     ],
   },
   {
     title: 'AI SDK UI',
+    icon: MessageSquare,
     items: [
       { title: 'useChat', href: '/learn/ui/chat', icon: MessageSquare },
       { title: 'useCompletion', href: '/learn/ui/completion', icon: TextCursorInput },
@@ -61,6 +85,7 @@ const navigation = [
   },
   {
     title: 'Text Generation',
+    icon: FileText,
     items: [
       { title: 'generateText', href: '/learn/text/generate', icon: FileText },
       { title: 'streamText', href: '/learn/text/stream', icon: Zap },
@@ -69,6 +94,7 @@ const navigation = [
   },
   {
     title: 'Structured Data',
+    icon: Package,
     items: [
       { title: 'generateObject', href: '/learn/structured/generate', icon: Package },
       { title: 'streamObject', href: '/learn/structured/stream', icon: PackageOpen },
@@ -76,6 +102,7 @@ const navigation = [
   },
   {
     title: 'Tool Calling',
+    icon: Wrench,
     items: [
       { title: 'Basic Tools', href: '/learn/tools/basic', icon: Wrench },
       { title: 'Multi-step Agents', href: '/learn/tools/agents', icon: Bot },
@@ -84,6 +111,7 @@ const navigation = [
   },
   {
     title: 'Multimodal',
+    icon: Image,
     items: [
       { title: 'Vision', href: '/learn/multimodal/vision', icon: Eye },
       { title: 'Image Generation', href: '/learn/multimodal/image', icon: Image },
@@ -93,6 +121,7 @@ const navigation = [
   },
   {
     title: 'RAG & Search',
+    icon: Hash,
     items: [
       { title: 'Embeddings', href: '/learn/rag/embeddings', icon: Hash },
       { title: 'Reranking', href: '/learn/rag/reranking', icon: ArrowUpDown },
@@ -100,6 +129,7 @@ const navigation = [
   },
   {
     title: 'Advanced',
+    icon: Settings,
     items: [
       { title: 'Model Settings', href: '/learn/advanced/settings', icon: Settings },
       { title: 'Middleware', href: '/learn/advanced/middleware', icon: Layers },
@@ -109,6 +139,7 @@ const navigation = [
   },
   {
     title: 'Development',
+    icon: TestTube,
     items: [
       { title: 'Testing', href: '/learn/dev/testing', icon: TestTube },
       { title: 'Telemetry', href: '/learn/dev/telemetry', icon: Activity },
@@ -117,15 +148,70 @@ const navigation = [
   },
 ]
 
-export function LearningSidebar() {
+function SidebarNav() {
   const pathname = usePathname()
+  const { state, setOpen } = useSidebar()
+
+  const isSectionActive = (items: NavItem[]) => {
+    return items.some(item => pathname === item.href)
+  }
+
+  const handleSectionClick = () => {
+    if (state === 'collapsed') {
+      setOpen(true)
+    }
+  }
 
   return (
+    <SidebarContent>
+      <SidebarGroup>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            {navigation.map((section) => (
+              <Collapsible
+                key={section.title}
+                asChild
+                defaultOpen={section.title === 'Getting Started' || isSectionActive(section.items)}
+                className="group/collapsible"
+              >
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton tooltip={section.title} onClick={handleSectionClick}>
+                      <section.icon className="size-4" />
+                      <span>{section.title}</span>
+                      <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {section.items.map((item) => (
+                        <SidebarMenuSubItem key={item.href}>
+                          <SidebarMenuSubButton asChild isActive={pathname === item.href}>
+                            <Link href={item.href}>
+                              <span>{item.title}</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+            ))}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    </SidebarContent>
+  )
+}
+
+export function LearningSidebar() {
+  return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b">
+      <SidebarHeader className="h-14 border-b flex items-center px-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
+            <SidebarMenuButton size="lg" asChild className="h-10">
               <Link href="/learn/overview">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                   <Sparkles className="size-4" />
@@ -140,31 +226,7 @@ export function LearningSidebar() {
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent>
-        {navigation.map((section) => (
-          <SidebarGroup key={section.title}>
-            <SidebarGroupLabel>{section.title}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {section.items.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === item.href}
-                      tooltip={item.title}
-                    >
-                      <Link href={item.href}>
-                        <item.icon className="size-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
-      </SidebarContent>
+      <SidebarNav />
     </Sidebar>
   )
 }

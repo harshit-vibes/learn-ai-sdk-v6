@@ -1,10 +1,14 @@
 'use client'
 
+import { useState } from 'react'
 import { LearningPage } from '@/components/educational'
 import { getPageContent } from '@/lib/education-content'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { TestTube, CheckCircle, Zap, Clock } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { TestTube, Play, Copy, Check, RotateCcw } from 'lucide-react'
 
 const content = getPageContent('dev/testing')!
 
@@ -119,74 +123,184 @@ describe('AI Feature', () => {
 ]
 
 function TestingDemo() {
-  const testUtilities = [
-    { name: 'MockLanguageModelV3', desc: 'Mock language model responses' },
-    { name: 'MockEmbeddingModelV3', desc: 'Mock embedding generation' },
-    { name: 'simulateReadableStream', desc: 'Simulate streaming with delays' },
-    { name: 'mockId', desc: 'Generate incrementing IDs' },
-    { name: 'mockValues', desc: 'Cycle through test values' },
-  ]
+  const [mockText, setMockText] = useState('Hello! This is a mocked response from the AI.')
+  const [promptTokens, setPromptTokens] = useState('10')
+  const [completionTokens, setCompletionTokens] = useState('25')
+  const [finishReason, setFinishReason] = useState<'stop' | 'length' | 'tool-calls'>('stop')
+  const [testPrompt, setTestPrompt] = useState('Write a haiku')
+  const [testResult, setTestResult] = useState<{
+    text: string
+    usage: { promptTokens: number; completionTokens: number }
+    finishReason: string
+  } | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const generatedCode = `import { MockLanguageModelV3 } from 'ai/test'
+import { generateText } from 'ai'
+
+const mockModel = new MockLanguageModelV3({
+  doGenerate: async () => ({
+    text: ${JSON.stringify(mockText)},
+    finishReason: '${finishReason}',
+    usage: {
+      promptTokens: ${promptTokens},
+      completionTokens: ${completionTokens},
+    },
+  }),
+})
+
+// Use in your test
+const result = await generateText({
+  model: mockModel,
+  prompt: ${JSON.stringify(testPrompt)},
+})
+
+// Assertions
+expect(result.text).toBe(${JSON.stringify(mockText)})
+expect(result.finishReason).toBe('${finishReason}')`
+
+  function simulateTest() {
+    // Simulate running the test with the mock
+    setTestResult({
+      text: mockText,
+      usage: {
+        promptTokens: parseInt(promptTokens) || 10,
+        completionTokens: parseInt(completionTokens) || 20,
+      },
+      finishReason,
+    })
+  }
+
+  function copyCode() {
+    navigator.clipboard.writeText(generatedCode)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  function reset() {
+    setTestResult(null)
+    setMockText('Hello! This is a mocked response from the AI.')
+    setPromptTokens('10')
+    setCompletionTokens('25')
+    setFinishReason('stop')
+    setTestPrompt('Write a haiku')
+  }
 
   return (
-    <div className="space-y-6">
-      <Card className="p-4 bg-green-500/10 border-green-500/20">
-        <div className="flex items-start gap-3">
-          <TestTube className="h-5 w-5 text-green-500 mt-0.5" />
-          <div>
-            <h3 className="font-medium">Why Mock AI?</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              AI models are non-deterministic and expensive to call. Mocking allows you to write
-              fast, reliable, and cost-free tests that verify your application logic.
-            </p>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Badge variant="outline">Mock Model Builder</Badge>
+        <Button variant="ghost" size="sm" onClick={reset}>
+          <RotateCcw className="h-4 w-4 mr-1" />
+          Reset
+        </Button>
+      </div>
+
+      {/* Mock Configuration */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Mock Response Text</label>
+            <Textarea
+              value={mockText}
+              onChange={(e) => setMockText(e.target.value)}
+              placeholder="Enter the text the mock should return..."
+              rows={3}
+            />
           </div>
-        </div>
-      </Card>
 
-      <div>
-        <h3 className="font-medium mb-3">Test Utilities</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Prompt Tokens</label>
+              <Input
+                type="number"
+                value={promptTokens}
+                onChange={(e) => setPromptTokens(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Completion Tokens</label>
+              <Input
+                type="number"
+                value={completionTokens}
+                onChange={(e) => setCompletionTokens(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Finish Reason</label>
+            <div className="flex gap-2">
+              {(['stop', 'length', 'tool-calls'] as const).map((reason) => (
+                <Badge
+                  key={reason}
+                  variant={finishReason === reason ? 'default' : 'outline'}
+                  className="cursor-pointer"
+                  onClick={() => setFinishReason(reason)}
+                >
+                  {reason}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Test Prompt</label>
+            <Input
+              value={testPrompt}
+              onChange={(e) => setTestPrompt(e.target.value)}
+              placeholder="The prompt you'd use in your test..."
+            />
+          </div>
+
+          <Button onClick={simulateTest} className="w-full">
+            <Play className="h-4 w-4 mr-2" />
+            Run Mock Test
+          </Button>
+        </div>
+
+        {/* Generated Code */}
         <div className="space-y-2">
-          {testUtilities.map((util) => (
-            <Card key={util.name} className="p-3">
-              <code className="text-primary">{util.name}</code>
-              <p className="text-xs text-muted-foreground mt-1">{util.desc}</p>
-            </Card>
-          ))}
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">Generated Test Code</label>
+            <Button variant="ghost" size="sm" onClick={copyCode}>
+              {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+          <pre className="bg-muted p-3 rounded-lg text-xs overflow-auto max-h-[300px]">
+            <code>{generatedCode}</code>
+          </pre>
         </div>
       </div>
 
-      <div>
-        <h3 className="font-medium mb-3">Benefits</h3>
-        <div className="grid md:grid-cols-3 gap-4">
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="h-4 w-4 text-yellow-500" />
-              <span className="font-medium">Fast</span>
+      {/* Test Result */}
+      {testResult && (
+        <Card className="p-4 bg-green-500/10 border-green-500/20">
+          <div className="flex items-center gap-2 mb-3">
+            <TestTube className="h-5 w-5 text-green-500" />
+            <span className="font-medium text-green-500">Test Passed!</span>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="p-2 bg-background rounded">
+              <code className="text-xs text-muted-foreground">result.text:</code>
+              <p className="mt-1">{testResult.text}</p>
             </div>
-            <p className="text-xs text-muted-foreground">No API latency, instant results</p>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="font-medium">Deterministic</span>
+            <div className="flex gap-4 text-xs text-muted-foreground">
+              <span>promptTokens: {testResult.usage.promptTokens}</span>
+              <span>completionTokens: {testResult.usage.completionTokens}</span>
+              <span>finishReason: {testResult.finishReason}</span>
             </div>
-            <p className="text-xs text-muted-foreground">Same input = same output, every time</p>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="h-4 w-4 text-blue-500" />
-              <span className="font-medium">Free</span>
-            </div>
-            <p className="text-xs text-muted-foreground">No API costs during testing</p>
-          </Card>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="font-medium mb-3">Import Path</h3>
-        <Card className="p-4 bg-muted">
-          <code className="text-sm">import &#123; MockLanguageModelV3, ... &#125; from 'ai/test'</code>
+          </div>
         </Card>
-      </div>
+      )}
+
+      {!testResult && (
+        <Card className="p-6 text-center text-muted-foreground">
+          <TestTube className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p className="font-medium">Configure your mock and run the test</p>
+          <p className="text-sm">See how deterministic responses work in testing</p>
+        </Card>
+      )}
     </div>
   )
 }
