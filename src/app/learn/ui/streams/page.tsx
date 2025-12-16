@@ -303,14 +303,14 @@ function StreamUtilitiesDemo() {
                     className={`p-2 rounded border text-sm font-mono ${getEventColor(event.type)}`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="text-xs uppercase">
+                      <span className="text-xs font-bold uppercase px-1.5 py-0.5 rounded bg-black/30 text-inherit">
                         {event.type}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
+                      </span>
+                      <span className="text-xs opacity-60">
                         +{((event.timestamp - (events[0]?.timestamp || event.timestamp)) / 1000).toFixed(2)}s
                       </span>
                     </div>
-                    <code className="text-xs break-all">{event.content}</code>
+                    <code className="text-xs break-all opacity-90">{event.content}</code>
                   </div>
                 ))}
               </div>
