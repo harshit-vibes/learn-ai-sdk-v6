@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { LearningPage } from '@/components/educational'
 import { getPageContent } from '@/lib/education-content'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Layers, Shield, Database, FileText, Zap, Play, RotateCcw, ArrowRight, Check } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Layers, Shield, Database, FileText, Zap, Play, RotateCcw, ArrowRight, Check, Loader2 } from 'lucide-react'
 
 const content = getPageContent('advanced/middleware')!
 
@@ -117,19 +118,27 @@ interface MiddlewareStep {
   color: string
   enabled: boolean
   action: string
-  status: 'pending' | 'processing' | 'done'
+}
+
+interface LogEntry {
+  timestamp: number
+  middleware: string
+  phase: 'request' | 'response'
+  message: string
+  data?: unknown
 }
 
 function MiddlewareDemo() {
   const [middlewares, setMiddlewares] = useState<MiddlewareStep[]>([
-    { id: 'logging', name: 'Logging', icon: FileText, color: 'blue', enabled: true, action: 'Log request to console', status: 'pending' },
-    { id: 'caching', name: 'Caching', icon: Database, color: 'green', enabled: true, action: 'Check cache for response', status: 'pending' },
-    { id: 'rag', name: 'RAG', icon: Zap, color: 'yellow', enabled: false, action: 'Inject context documents', status: 'pending' },
-    { id: 'guardrails', name: 'Guardrails', icon: Shield, color: 'red', enabled: true, action: 'Validate input content', status: 'pending' },
+    { id: 'logging', name: 'Logging', icon: FileText, color: 'blue', enabled: true, action: 'Log request to console' },
+    { id: 'caching', name: 'Caching', icon: Database, color: 'green', enabled: true, action: 'Check cache for response' },
+    { id: 'rag', name: 'RAG', icon: Zap, color: 'yellow', enabled: false, action: 'Inject context documents' },
+    { id: 'guardrails', name: 'Guardrails', icon: Shield, color: 'red', enabled: true, action: 'Validate input content' },
   ])
   const [isRunning, setIsRunning] = useState(false)
-  const [currentStep, setCurrentStep] = useState(-1)
-  const [logs, setLogs] = useState<string[]>([])
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [result, setResult] = useState<{ text?: string; error?: string; totalTime?: number } | null>(null)
+  const [prompt, setPrompt] = useState('What is the AI SDK in one sentence?')
 
   const enabledMiddlewares = middlewares.filter(m => m.enabled)
 
@@ -141,59 +150,41 @@ function MiddlewareDemo() {
 
   const reset = () => {
     setIsRunning(false)
-    setCurrentStep(-1)
     setLogs([])
-    setMiddlewares(prev => prev.map(m => ({ ...m, status: 'pending' })))
+    setResult(null)
   }
 
-  const runSimulation = async () => {
+  const runMiddlewareChain = async () => {
     reset()
     setIsRunning(true)
-    setLogs(['Starting middleware chain...'])
 
-    const enabled = middlewares.filter(m => m.enabled)
+    try {
+      const response = await fetch('/api/learn/middleware', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          middlewares: {
+            logging: middlewares.find(m => m.id === 'logging')?.enabled ?? false,
+            caching: middlewares.find(m => m.id === 'caching')?.enabled ?? false,
+            rag: middlewares.find(m => m.id === 'rag')?.enabled ?? false,
+            guardrails: middlewares.find(m => m.id === 'guardrails')?.enabled ?? false,
+          },
+          prompt,
+        }),
+      })
 
-    for (let i = 0; i < enabled.length; i++) {
-      setCurrentStep(i)
-      const mw = enabled[i]
-
-      // Mark as processing
-      setMiddlewares(prev => prev.map(m =>
-        m.id === mw.id ? { ...m, status: 'processing' } : m
-      ))
-
-      setLogs(prev => [...prev, `[${mw.name}] ${mw.action}...`])
-      await new Promise(resolve => setTimeout(resolve, 800))
-
-      // Mark as done
-      setMiddlewares(prev => prev.map(m =>
-        m.id === mw.id ? { ...m, status: 'done' } : m
-      ))
-
-      setLogs(prev => [...prev, `[${mw.name}] Complete`])
+      const data = await response.json()
+      setLogs(data.logs || [])
+      setResult({
+        text: data.text,
+        error: data.error,
+        totalTime: data.totalTime,
+      })
+    } catch (error) {
+      setResult({ error: error instanceof Error ? error.message : 'Request failed' })
+    } finally {
+      setIsRunning(false)
     }
-
-    // Model call
-    setLogs(prev => [...prev, '[Model] Calling language model...'])
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setLogs(prev => [...prev, '[Model] Response received'])
-
-    // Reverse through middleware for response
-    for (let i = enabled.length - 1; i >= 0; i--) {
-      const mw = enabled[i]
-      if (mw.id === 'logging') {
-        setLogs(prev => [...prev, `[${mw.name}] Logging response...`])
-        await new Promise(resolve => setTimeout(resolve, 300))
-      }
-      if (mw.id === 'caching') {
-        setLogs(prev => [...prev, `[${mw.name}] Caching response...`])
-        await new Promise(resolve => setTimeout(resolve, 300))
-      }
-    }
-
-    setLogs(prev => [...prev, 'Middleware chain complete!'])
-    setCurrentStep(-1)
-    setIsRunning(false)
   }
 
   const getColorClass = (color: string) => {
@@ -206,20 +197,49 @@ function MiddlewareDemo() {
     return colors[color] || colors.blue
   }
 
+  const getLogColor = (middleware: string) => {
+    const mw = middlewares.find(m => m.name === middleware)
+    if (!mw) return 'text-zinc-400'
+    const colors: Record<string, string> = {
+      blue: 'text-blue-400',
+      green: 'text-green-400',
+      yellow: 'text-yellow-400',
+      red: 'text-red-400',
+    }
+    return colors[mw.color] || 'text-zinc-400'
+  }
+
   return (
     <div className="space-y-6">
       <Card className="p-4 bg-purple-500/10 border-purple-500/20">
         <div className="flex items-start gap-3">
           <Layers className="h-5 w-5 text-purple-500 mt-0.5" />
           <div>
-            <h3 className="font-medium">Middleware Chain Visualizer</h3>
+            <h3 className="font-medium">Live Middleware Execution</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Toggle middleware layers and watch how requests flow through the chain.
-              Middleware intercepts requests before the model and responses after.
+              Toggle middleware layers and run a real API call to see the middleware chain execute.
+              Watch the logs update in real-time as each middleware processes the request.
             </p>
           </div>
         </div>
       </Card>
+
+      {/* Prompt Input */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Test Prompt</label>
+        <div className="flex gap-2">
+          <Input
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Enter a prompt to test..."
+            className="flex-1"
+            disabled={isRunning}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Try: &quot;What is AI?&quot; or test guardrails with words like &quot;hack&quot;
+        </p>
+      </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Middleware Configuration */}
@@ -231,23 +251,31 @@ function MiddlewareDemo() {
                 <RotateCcw className="h-3 w-3 mr-1" />
                 Reset
               </Button>
-              <Button size="sm" onClick={runSimulation} disabled={isRunning || enabledMiddlewares.length === 0}>
-                <Play className="h-3 w-3 mr-1" />
-                Run
+              <Button size="sm" onClick={runMiddlewareChain} disabled={isRunning || !prompt.trim()}>
+                {isRunning ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3 w-3 mr-1" />
+                    Run
+                  </>
+                )}
               </Button>
             </div>
           </div>
 
           <div className="space-y-2">
-            {middlewares.map((mw, i) => {
+            {middlewares.map((mw) => {
               const Icon = mw.icon
-              const isActive = enabledMiddlewares.findIndex(m => m.id === mw.id) === currentStep
               return (
                 <Card
                   key={mw.id}
                   className={`p-3 cursor-pointer transition-all ${
                     !mw.enabled ? 'opacity-50' : ''
-                  } ${isActive ? 'ring-2 ring-primary' : ''}`}
+                  }`}
                   onClick={() => !isRunning && toggleMiddleware(mw.id)}
                 >
                   <div className="flex items-center justify-between">
@@ -261,7 +289,6 @@ function MiddlewareDemo() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {mw.status === 'done' && <Check className="h-4 w-4 text-green-500" />}
                       <div className={`w-3 h-3 rounded-full ${mw.enabled ? 'bg-green-500' : 'bg-gray-400'}`} />
                     </div>
                   </div>
@@ -274,7 +301,7 @@ function MiddlewareDemo() {
           <Card className="p-4">
             <div className="flex items-center justify-center gap-1 flex-wrap">
               <Badge variant="outline">Request</Badge>
-              {enabledMiddlewares.map((mw, i) => (
+              {enabledMiddlewares.map((mw) => (
                 <div key={mw.id} className="flex items-center gap-1">
                   <ArrowRight className="h-3 w-3 text-muted-foreground" />
                   <Badge className={`${getColorClass(mw.color)} border`}>{mw.name}</Badge>
@@ -290,18 +317,59 @@ function MiddlewareDemo() {
         <div className="space-y-4">
           <h3 className="font-medium">Execution Log</h3>
           <Card className="p-4 bg-zinc-950 h-[350px] overflow-y-auto font-mono">
-            {logs.length === 0 ? (
+            {logs.length === 0 && !isRunning ? (
               <p className="text-sm text-zinc-500">Click &quot;Run&quot; to execute the middleware chain</p>
+            ) : isRunning && logs.length === 0 ? (
+              <div className="flex items-center gap-2 text-zinc-400">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Executing...</span>
+              </div>
             ) : (
               <div className="space-y-1">
                 {logs.map((log, i) => (
-                  <div key={i} className="text-xs text-zinc-300">
-                    <span className="text-zinc-500">{String(i + 1).padStart(2, '0')}.</span> {log}
+                  <div key={i} className="text-xs">
+                    <span className="text-zinc-500">{String(log.timestamp).padStart(4, ' ')}ms</span>
+                    {' '}
+                    <span className={getLogColor(log.middleware)}>[{log.middleware}]</span>
+                    {' '}
+                    <span className="text-zinc-400">{log.phase === 'request' ? '→' : '←'}</span>
+                    {' '}
+                    <span className="text-zinc-300">{log.message}</span>
                   </div>
                 ))}
               </div>
             )}
           </Card>
+
+          {/* Result */}
+          {result && (
+            <Card className={`p-4 ${result.error ? 'bg-red-500/10 border-red-500/20' : 'bg-green-500/10 border-green-500/20'}`}>
+              {result.error ? (
+                <div>
+                  <div className="flex items-center gap-2 text-red-500 font-medium mb-2">
+                    <Shield className="h-4 w-4" />
+                    Error
+                  </div>
+                  <p className="text-sm text-red-400">{result.error}</p>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-green-500 font-medium">
+                      <Check className="h-4 w-4" />
+                      Success
+                    </div>
+                    {result.totalTime && (
+                      <Badge variant="outline" className="text-xs">
+                        {result.totalTime}ms total
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm">{result.text}</p>
+                </div>
+              )}
+            </Card>
+          )}
         </div>
       </div>
 

@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Activity, Copy, Check, Plus, X, RotateCcw } from 'lucide-react'
+import { Activity, Copy, Check, Plus, X, RotateCcw, Play, Loader2, ChevronRight, ChevronDown } from 'lucide-react'
 
 const content = getPageContent('dev/telemetry')!
 
@@ -89,6 +89,26 @@ const result = await generateText({
   },
 ]
 
+interface Span {
+  id: string
+  name: string
+  startTime: number
+  endTime?: number
+  duration?: number
+  attributes: Record<string, unknown>
+  status: 'running' | 'success' | 'error'
+  children?: Span[]
+}
+
+interface TelemetryResult {
+  success: boolean
+  text?: string
+  spans?: Span[]
+  usage?: { promptTokens: number; completionTokens: number }
+  duration?: number
+  error?: string
+}
+
 function TelemetryDemo() {
   const [isEnabled, setIsEnabled] = useState(true)
   const [functionId, setFunctionId] = useState('chat-completion')
@@ -100,6 +120,10 @@ function TelemetryDemo() {
   const [newKey, setNewKey] = useState('')
   const [newValue, setNewValue] = useState('')
   const [copied, setCopied] = useState(false)
+  const [isRunning, setIsRunning] = useState(false)
+  const [result, setResult] = useState<TelemetryResult | null>(null)
+  const [expandedSpans, setExpandedSpans] = useState<Set<string>>(new Set())
+  const [prompt] = useState('What is the AI SDK in one sentence?')
 
   const addMetadata = () => {
     if (newKey && newValue) {
@@ -119,6 +143,7 @@ function TelemetryDemo() {
     setRecordInputs(true)
     setRecordOutputs(true)
     setMetadata([{ key: 'userId', value: 'user_123' }])
+    setResult(null)
   }
 
   const generateCode = () => {
@@ -145,15 +170,109 @@ function TelemetryDemo() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const runWithTelemetry = async () => {
+    setIsRunning(true)
+    setResult(null)
+    setExpandedSpans(new Set())
+
+    try {
+      const response = await fetch('/api/learn/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config: {
+            isEnabled,
+            functionId,
+            recordInputs,
+            recordOutputs,
+            metadata,
+          },
+          prompt,
+        }),
+      })
+
+      const data = await response.json()
+      setResult(data)
+
+      // Auto-expand root span
+      if (data.spans?.[0]) {
+        setExpandedSpans(new Set([data.spans[0].id]))
+      }
+    } catch (error) {
+      setResult({
+        success: false,
+        error: error instanceof Error ? error.message : 'Request failed',
+      })
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
+  const toggleSpan = (spanId: string) => {
+    setExpandedSpans(prev => {
+      const next = new Set(prev)
+      if (next.has(spanId)) {
+        next.delete(spanId)
+      } else {
+        next.add(spanId)
+      }
+      return next
+    })
+  }
+
+  const renderSpan = (span: Span, depth = 0) => {
+    const isExpanded = expandedSpans.has(span.id)
+    const hasChildren = span.children && span.children.length > 0
+    const statusColor = span.status === 'success' ? 'text-green-500' : span.status === 'error' ? 'text-red-500' : 'text-blue-500'
+
+    return (
+      <div key={span.id} className="border-l-2 border-zinc-700" style={{ marginLeft: depth * 16 }}>
+        <div
+          className={`flex items-center gap-2 p-2 hover:bg-zinc-800/50 cursor-pointer ${isExpanded ? 'bg-zinc-800/30' : ''}`}
+          onClick={() => toggleSpan(span.id)}
+        >
+          {hasChildren ? (
+            isExpanded ? <ChevronDown className="h-3 w-3 text-zinc-500" /> : <ChevronRight className="h-3 w-3 text-zinc-500" />
+          ) : (
+            <div className="w-3" />
+          )}
+          <div className={`w-2 h-2 rounded-full ${statusColor} ${span.status === 'running' ? 'animate-pulse' : ''}`} />
+          <span className="text-xs font-mono text-zinc-300">{span.name}</span>
+          {span.duration !== undefined && (
+            <span className="text-xs text-zinc-500 ml-auto">{span.duration}ms</span>
+          )}
+        </div>
+        {isExpanded && (
+          <div className="px-4 py-2 bg-zinc-900/50 text-xs space-y-1">
+            {Object.entries(span.attributes).map(([key, value]) => (
+              value !== undefined && (
+                <div key={key} className="flex gap-2">
+                  <span className="text-zinc-500">{key}:</span>
+                  <span className="text-zinc-300 font-mono break-all">
+                    {typeof value === 'string' && value.length > 50
+                      ? value.slice(0, 50) + '...'
+                      : String(value)}
+                  </span>
+                </div>
+              )
+            ))}
+          </div>
+        )}
+        {isExpanded && hasChildren && span.children?.map(child => renderSpan(child, depth + 1))}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <Card className="p-4 bg-purple-500/10 border-purple-500/20">
         <div className="flex items-start gap-3">
           <Activity className="h-5 w-5 text-purple-500 mt-0.5" />
           <div>
-            <h3 className="font-medium">Telemetry Config Builder</h3>
+            <h3 className="font-medium">Live Telemetry Viewer</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Configure OpenTelemetry settings interactively. Toggle options and see the generated code update in real-time.
+              Configure telemetry settings and run an API call to see real trace data.
+              Click on spans to view their attributes.
             </p>
           </div>
         </div>
@@ -164,10 +283,25 @@ function TelemetryDemo() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-medium">Configuration</h3>
-            <Button variant="outline" size="sm" onClick={resetConfig}>
-              <RotateCcw className="h-3 w-3 mr-1" />
-              Reset
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={resetConfig}>
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reset
+              </Button>
+              <Button size="sm" onClick={runWithTelemetry} disabled={isRunning || !isEnabled}>
+                {isRunning ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-3 w-3 mr-1" />
+                    Run
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
           {/* Enable/Disable */}
@@ -196,7 +330,6 @@ function TelemetryDemo() {
               placeholder="e.g., chat-completion"
               className="text-sm"
             />
-            <p className="text-xs text-muted-foreground mt-1">Identifies this function in traces</p>
           </Card>
 
           {/* Privacy Controls */}
@@ -205,7 +338,7 @@ function TelemetryDemo() {
             <label className="flex items-center justify-between cursor-pointer">
               <div>
                 <span className="text-sm">Record Inputs</span>
-                <p className="text-xs text-muted-foreground">Log prompts & messages</p>
+                <p className="text-xs text-muted-foreground">Log prompts</p>
               </div>
               <button
                 onClick={() => setRecordInputs(!recordInputs)}
@@ -221,7 +354,7 @@ function TelemetryDemo() {
             <label className="flex items-center justify-between cursor-pointer">
               <div>
                 <span className="text-sm">Record Outputs</span>
-                <p className="text-xs text-muted-foreground">Log AI responses</p>
+                <p className="text-xs text-muted-foreground">Log responses</p>
               </div>
               <button
                 onClick={() => setRecordOutputs(!recordOutputs)}
@@ -271,22 +404,66 @@ function TelemetryDemo() {
           </Card>
         </div>
 
-        {/* Generated Code */}
+        {/* Trace Viewer */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium">Generated Code</h3>
+            <h3 className="font-medium">Trace Viewer</h3>
             <Button variant="outline" size="sm" onClick={copyCode}>
               {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
-              {copied ? 'Copied!' : 'Copy'}
+              {copied ? 'Copied!' : 'Copy Code'}
             </Button>
           </div>
-          <Card className="p-4 bg-zinc-950 text-zinc-100 overflow-x-auto">
-            <pre className="text-xs font-mono whitespace-pre-wrap">{generateCode()}</pre>
+
+          {/* Trace visualization */}
+          <Card className="p-0 bg-zinc-950 overflow-hidden">
+            <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-400">Spans</span>
+              {result?.duration && (
+                <Badge variant="outline" className="text-xs">
+                  Total: {result.duration}ms
+                </Badge>
+              )}
+            </div>
+            <div className="min-h-[200px] max-h-[300px] overflow-y-auto">
+              {isRunning ? (
+                <div className="flex items-center justify-center h-[200px]">
+                  <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                </div>
+              ) : result?.spans ? (
+                <div className="p-2">
+                  {result.spans.map(span => renderSpan(span))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-[200px] text-zinc-500 text-sm">
+                  Run a request to see trace data
+                </div>
+              )}
+            </div>
           </Card>
+
+          {/* Response */}
+          {result?.success && result.text && (
+            <Card className="p-3 bg-green-500/10 border-green-500/20">
+              <h4 className="text-xs font-medium text-green-500 mb-2">Response</h4>
+              <p className="text-sm">{result.text}</p>
+              {result.usage && (
+                <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                  <span>Prompt: {result.usage.promptTokens} tokens</span>
+                  <span>Completion: {result.usage.completionTokens} tokens</span>
+                </div>
+              )}
+            </Card>
+          )}
+
+          {result?.error && (
+            <Card className="p-3 bg-red-500/10 border-red-500/20">
+              <p className="text-sm text-red-500">{result.error}</p>
+            </Card>
+          )}
 
           {/* Collected Spans Preview */}
           <Card className="p-3">
-            <h4 className="text-sm font-medium mb-2">What Gets Collected</h4>
+            <h4 className="text-sm font-medium mb-2">Attributes Collected</h4>
             <div className="flex flex-wrap gap-1">
               <Badge variant="outline" className="text-xs">ai.model.id</Badge>
               <Badge variant="outline" className="text-xs">ai.model.provider</Badge>

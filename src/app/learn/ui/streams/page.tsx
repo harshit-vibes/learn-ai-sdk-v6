@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { LearningPage } from '@/components/educational'
 import { getPageContent } from '@/lib/education-content'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Play, Pause, RotateCcw, Zap } from 'lucide-react'
+import { Play, RotateCcw, Zap, Loader2 } from 'lucide-react'
 
 const content = getPageContent('ui/streams')!
 
@@ -108,45 +108,21 @@ interface StreamEvent {
   timestamp: number
 }
 
-const scenarioEvents: Record<string, Omit<StreamEvent, 'id' | 'timestamp'>[]> = {
-  simple: [
-    { type: 'text', content: 'Hello' },
-    { type: 'text', content: ', ' },
-    { type: 'text', content: 'world' },
-    { type: 'text', content: '!' },
-    { type: 'finish', content: 'Stream complete' },
-  ],
-  tools: [
-    { type: 'text', content: 'Let me check the weather...' },
-    { type: 'tool-call', content: 'weather({ location: "Paris" })' },
-    { type: 'tool-result', content: '{ temperature: 22, condition: "sunny" }' },
-    { type: 'text', content: 'The weather in Paris is 22°C and sunny!' },
-    { type: 'finish', content: 'Stream complete' },
-  ],
-  complex: [
-    { type: 'text', content: 'Processing your request...' },
-    { type: 'tool-call', content: 'searchDocs({ query: "AI SDK" })' },
-    { type: 'tool-result', content: '[doc1, doc2, doc3]' },
-    { type: 'text', content: 'Found 3 documents. ' },
-    { type: 'tool-call', content: 'summarize({ docs: [...] })' },
-    { type: 'tool-result', content: '{ summary: "AI SDK is..." }' },
-    { type: 'text', content: 'Here is the summary: AI SDK provides...' },
-    { type: 'finish', content: 'Stream complete' },
-  ],
-  error: [
-    { type: 'text', content: 'Starting task...' },
-    { type: 'tool-call', content: 'riskyOperation()' },
-    { type: 'error', content: 'Operation timed out after 30s' },
-  ],
+type Scenario = 'simple' | 'tools' | 'complex' | 'error'
+
+const scenarioDescriptions: Record<Scenario, string> = {
+  simple: 'Simple text streaming from LLM',
+  tools: 'Tool calling with weather lookup',
+  complex: 'Multi-step with search & summarize',
+  error: 'Error handling demonstration',
 }
 
 function StreamUtilitiesDemo() {
   const [events, setEvents] = useState<StreamEvent[]>([])
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [scenario, setScenario] = useState<keyof typeof scenarioEvents>('simple')
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [scenario, setScenario] = useState<Scenario>('simple')
   const [accumulatedText, setAccumulatedText] = useState('')
-  const eventIndexRef = useRef(0)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const eventIdRef = useRef(0)
 
   const getEventColor = (type: StreamEvent['type']) => {
     switch (type) {
@@ -159,58 +135,93 @@ function StreamUtilitiesDemo() {
   }
 
   const reset = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current)
     setEvents([])
     setAccumulatedText('')
-    setIsPlaying(false)
-    eventIndexRef.current = 0
+    setIsStreaming(false)
+    eventIdRef.current = 0
   }
 
-  const play = () => {
-    if (eventIndexRef.current >= scenarioEvents[scenario].length) {
-      reset()
+  const addEvent = (type: StreamEvent['type'], content: string) => {
+    setEvents(prev => [...prev, {
+      id: eventIdRef.current++,
+      type,
+      content,
+      timestamp: Date.now(),
+    }])
+  }
+
+  const runStream = async () => {
+    reset()
+    setIsStreaming(true)
+
+    try {
+      const response = await fetch('/api/learn/streams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenario }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Stream request failed')
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No reader available')
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.trim() || !line.startsWith('0:')) continue
+
+          try {
+            // Parse the data stream format
+            const jsonStr = line.slice(2) // Remove '0:' prefix
+            const data = JSON.parse(jsonStr)
+
+            if (typeof data === 'string') {
+              // Text delta
+              setAccumulatedText(prev => prev + data)
+              addEvent('text', data)
+            } else if (data && typeof data === 'object') {
+              if (data.toolCallId && data.toolName) {
+                // Tool call
+                addEvent('tool-call', `${data.toolName}(${JSON.stringify(data.args)})`)
+              } else if (data.toolCallId && data.result) {
+                // Tool result
+                addEvent('tool-result', JSON.stringify(data.result))
+              }
+            }
+          } catch {
+            // Handle other stream formats
+            if (line.includes('e:')) {
+              // Finish event
+              addEvent('finish', 'Stream complete')
+            }
+          }
+        }
+      }
+
+      // Add finish event if not already added
+      if (events.length === 0 || events[events.length - 1]?.type !== 'finish') {
+        addEvent('finish', 'Stream complete')
+      }
+    } catch (error) {
+      addEvent('error', error instanceof Error ? error.message : 'Stream failed')
+    } finally {
+      setIsStreaming(false)
     }
-    setIsPlaying(true)
   }
 
-  const pause = () => {
-    setIsPlaying(false)
-    if (intervalRef.current) clearInterval(intervalRef.current)
-  }
-
-  useEffect(() => {
-    if (!isPlaying) return
-
-    intervalRef.current = setInterval(() => {
-      const scenarioList = scenarioEvents[scenario]
-      if (eventIndexRef.current >= scenarioList.length) {
-        setIsPlaying(false)
-        if (intervalRef.current) clearInterval(intervalRef.current)
-        return
-      }
-
-      const eventData = scenarioList[eventIndexRef.current]
-      const newEvent: StreamEvent = {
-        id: eventIndexRef.current,
-        ...eventData,
-        timestamp: Date.now(),
-      }
-
-      setEvents(prev => [...prev, newEvent])
-
-      if (eventData.type === 'text') {
-        setAccumulatedText(prev => prev + eventData.content)
-      }
-
-      eventIndexRef.current++
-    }, 600)
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [isPlaying, scenario])
-
-  const changeScenario = (newScenario: keyof typeof scenarioEvents) => {
+  const changeScenario = (newScenario: Scenario) => {
     reset()
     setScenario(newScenario)
   }
@@ -221,44 +232,58 @@ function StreamUtilitiesDemo() {
         <div className="flex items-start gap-3">
           <Zap className="h-5 w-5 text-blue-500 mt-0.5" />
           <div>
-            <h3 className="font-medium">Stream Event Visualizer</h3>
+            <h3 className="font-medium">Live Stream Event Visualizer</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Watch how stream events flow in real-time. Select a scenario and press play to see different event types.
+              Watch real stream events from the AI SDK. Select a scenario and click Play to see actual streaming data.
             </p>
           </div>
         </div>
       </Card>
 
       {/* Controls */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <div className="flex gap-2">
-          <Button
-            variant={isPlaying ? "secondary" : "default"}
-            size="sm"
-            onClick={isPlaying ? pause : play}
-          >
-            {isPlaying ? <Pause className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
-            {isPlaying ? 'Pause' : 'Play'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={reset}>
-            <RotateCcw className="h-4 w-4 mr-1" />
-            Reset
-          </Button>
-        </div>
-        <div className="h-6 w-px bg-border mx-2" />
-        <div className="flex gap-1">
-          {(Object.keys(scenarioEvents) as (keyof typeof scenarioEvents)[]).map(s => (
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex gap-2">
             <Button
-              key={s}
-              variant={scenario === s ? "default" : "outline"}
+              variant="default"
               size="sm"
-              onClick={() => changeScenario(s)}
-              className="capitalize"
+              onClick={runStream}
+              disabled={isStreaming}
             >
-              {s}
+              {isStreaming ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Streaming...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-1" />
+                  Run Stream
+                </>
+              )}
             </Button>
-          ))}
+            <Button variant="outline" size="sm" onClick={reset} disabled={isStreaming}>
+              <RotateCcw className="h-4 w-4 mr-1" />
+              Reset
+            </Button>
+          </div>
+          <div className="h-6 w-px bg-border mx-2" />
+          <div className="flex gap-1 flex-wrap">
+            {(Object.keys(scenarioDescriptions) as Scenario[]).map(s => (
+              <Button
+                key={s}
+                variant={scenario === s ? "default" : "outline"}
+                size="sm"
+                onClick={() => changeScenario(s)}
+                className="capitalize"
+                disabled={isStreaming}
+              >
+                {s}
+              </Button>
+            ))}
+          </div>
         </div>
+        <p className="text-xs text-muted-foreground">{scenarioDescriptions[scenario]}</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -268,7 +293,7 @@ function StreamUtilitiesDemo() {
           <Card className="p-4 bg-zinc-950 h-[300px] overflow-y-auto">
             {events.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
-                Press Play to start streaming events
+                {isStreaming ? 'Waiting for events...' : 'Click "Run Stream" to start'}
               </p>
             ) : (
               <div className="space-y-2">
@@ -282,7 +307,7 @@ function StreamUtilitiesDemo() {
                         {event.type}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        +{((event.timestamp - (events[0]?.timestamp || event.timestamp)) / 1000).toFixed(1)}s
+                        +{((event.timestamp - (events[0]?.timestamp || event.timestamp)) / 1000).toFixed(2)}s
                       </span>
                     </div>
                     <code className="text-xs break-all">{event.content}</code>
@@ -301,7 +326,7 @@ function StreamUtilitiesDemo() {
               <p className="text-sm whitespace-pre-wrap">{accumulatedText}</p>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-8">
-                Text events will appear here as they stream
+                {isStreaming ? 'Receiving text...' : 'Text will appear here as it streams'}
               </p>
             )}
           </Card>

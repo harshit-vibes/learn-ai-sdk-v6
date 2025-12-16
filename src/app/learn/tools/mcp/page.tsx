@@ -6,7 +6,8 @@ import { getPageContent } from '@/lib/education-content'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ExternalLink, Server, Plug, Wrench, Database, Search, Loader2, CheckCircle, XCircle, FileText, GitBranch, Globe } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { ExternalLink, Plug, Wrench, Database, Search, Loader2, CheckCircle, XCircle, FileText, GitBranch, Globe, Play, Terminal, Info } from 'lucide-react'
 
 const content = getPageContent('tools/mcp')!
 
@@ -78,83 +79,113 @@ server.setRequestHandler('tools/call', async (request) => {
   },
 ]
 
-interface MCPServer {
+interface MCPServerInfo {
   id: string
   name: string
-  icon: typeof Server
+  icon: React.ComponentType<{ className?: string }>
   description: string
-  tools: { name: string; description: string; params: string[] }[]
 }
 
-const mcpServers: MCPServer[] = [
+interface DiscoveredTool {
+  name: string
+  description: string
+  inputSchema: {
+    type: string
+    properties: Record<string, { type: string; description?: string }>
+    required?: string[]
+  }
+}
+
+interface SetupGuide {
+  step1: string
+  step2: string
+  step3: string
+}
+
+interface ExecutionResult {
+  success: boolean
+  toolName: string
+  args: Record<string, unknown>
+  result: Record<string, unknown>
+  executionTime: number
+}
+
+const mcpServers: MCPServerInfo[] = [
   {
     id: 'filesystem',
     name: '@modelcontextprotocol/server-filesystem',
     icon: FileText,
     description: 'File system operations',
-    tools: [
-      { name: 'read_file', description: 'Read contents of a file', params: ['path'] },
-      { name: 'write_file', description: 'Write content to a file', params: ['path', 'content'] },
-      { name: 'list_directory', description: 'List files in a directory', params: ['path'] },
-      { name: 'search_files', description: 'Search for files by pattern', params: ['pattern', 'path'] },
-    ],
   },
   {
     id: 'github',
     name: '@modelcontextprotocol/server-github',
     icon: GitBranch,
     description: 'GitHub repository operations',
-    tools: [
-      { name: 'create_issue', description: 'Create a new GitHub issue', params: ['repo', 'title', 'body'] },
-      { name: 'list_prs', description: 'List pull requests', params: ['repo', 'state'] },
-      { name: 'get_file_contents', description: 'Get file from repository', params: ['repo', 'path'] },
-    ],
   },
   {
     id: 'postgres',
     name: '@modelcontextprotocol/server-postgres',
     icon: Database,
     description: 'PostgreSQL database queries',
-    tools: [
-      { name: 'query', description: 'Execute SQL query', params: ['sql'] },
-      { name: 'list_tables', description: 'List database tables', params: [] },
-      { name: 'describe_table', description: 'Get table schema', params: ['table'] },
-    ],
   },
   {
     id: 'puppeteer',
     name: '@modelcontextprotocol/server-puppeteer',
     icon: Globe,
     description: 'Browser automation',
-    tools: [
-      { name: 'navigate', description: 'Navigate to URL', params: ['url'] },
-      { name: 'screenshot', description: 'Take page screenshot', params: ['selector?'] },
-      { name: 'click', description: 'Click an element', params: ['selector'] },
-      { name: 'type', description: 'Type into input', params: ['selector', 'text'] },
-    ],
   },
 ]
 
 function MCPDemo() {
   const [selectedServer, setSelectedServer] = useState<string | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
-  const [discoveredTools, setDiscoveredTools] = useState<MCPServer['tools']>([])
+  const [discoveredTools, setDiscoveredTools] = useState<DiscoveredTool[]>([])
+  const [setupGuide, setSetupGuide] = useState<SetupGuide | null>(null)
+  const [selectedTool, setSelectedTool] = useState<DiscoveredTool | null>(null)
+  const [toolArgs, setToolArgs] = useState<Record<string, string>>({})
+  const [isExecuting, setIsExecuting] = useState(false)
+  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
 
   const connectToServer = async (serverId: string) => {
     setSelectedServer(serverId)
     setConnectionStatus('connecting')
     setDiscoveredTools([])
+    setSetupGuide(null)
+    setSelectedTool(null)
+    setExecutionResult(null)
 
-    // Simulate connection delay
-    await new Promise(resolve => setTimeout(resolve, 800))
+    try {
+      // Connect to server
+      const connectResponse = await fetch('/api/learn/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'connect', serverId }),
+      })
+      const connectData = await connectResponse.json()
 
-    const server = mcpServers.find(s => s.id === serverId)
-    if (server) {
-      // Simulate discovering tools
-      await new Promise(resolve => setTimeout(resolve, 600))
-      setDiscoveredTools(server.tools)
-      setConnectionStatus('connected')
-    } else {
+      if (!connectData.success) {
+        setConnectionStatus('error')
+        return
+      }
+
+      setSetupGuide(connectData.setupGuide)
+
+      // Discover tools
+      const discoverResponse = await fetch('/api/learn/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'discover', serverId }),
+      })
+      const discoverData = await discoverResponse.json()
+
+      if (discoverData.success) {
+        setDiscoveredTools(discoverData.tools)
+        setConnectionStatus('connected')
+      } else {
+        setConnectionStatus('error')
+      }
+    } catch {
       setConnectionStatus('error')
     }
   }
@@ -163,6 +194,45 @@ function MCPDemo() {
     setSelectedServer(null)
     setConnectionStatus('idle')
     setDiscoveredTools([])
+    setSetupGuide(null)
+    setSelectedTool(null)
+    setToolArgs({})
+    setExecutionResult(null)
+  }
+
+  const selectTool = (tool: DiscoveredTool) => {
+    setSelectedTool(tool)
+    setToolArgs({})
+    setExecutionResult(null)
+  }
+
+  const executeTool = async () => {
+    if (!selectedTool || !selectedServer) return
+
+    setIsExecuting(true)
+    setExecutionResult(null)
+
+    try {
+      const response = await fetch('/api/learn/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'execute',
+          serverId: selectedServer,
+          toolName: selectedTool.name,
+          toolArgs,
+        }),
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        setExecutionResult(data)
+      }
+    } catch (error) {
+      console.error('Execution error:', error)
+    } finally {
+      setIsExecuting(false)
+    }
   }
 
   const selectedServerData = mcpServers.find(s => s.id === selectedServer)
@@ -173,121 +243,200 @@ function MCPDemo() {
         <div className="flex items-start gap-3">
           <Plug className="h-5 w-5 text-blue-500 mt-0.5" />
           <div>
-            <h3 className="font-medium">MCP Tool Discovery Simulator</h3>
+            <h3 className="font-medium">MCP Interactive Demo</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Select an MCP server to simulate connecting and discovering available tools.
-              This demonstrates how MCP enables dynamic tool discovery.
+              Connect to MCP servers, discover tools, and execute them. This simulates
+              the MCP protocol to demonstrate how dynamic tool discovery works.
             </p>
           </div>
         </div>
       </Card>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Server Selection */}
-        <div className="space-y-3">
-          <h3 className="font-medium">MCP Servers</h3>
-          <div className="space-y-2">
-            {mcpServers.map((server) => {
-              const Icon = server.icon
-              const isSelected = selectedServer === server.id
-              return (
-                <Card
-                  key={server.id}
-                  className={`p-3 cursor-pointer transition-all ${
-                    isSelected ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-muted/50'
-                  }`}
-                  onClick={() => !isSelected && connectToServer(server.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded ${isSelected ? 'bg-primary/20' : 'bg-muted'}`}>
-                        <Icon className={`h-4 w-4 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
-                      </div>
-                      <div>
-                        <code className="text-xs font-medium">{server.name}</code>
-                        <p className="text-xs text-muted-foreground">{server.description}</p>
-                      </div>
-                    </div>
-                    {isSelected && connectionStatus === 'connected' && (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    )}
-                    {isSelected && connectionStatus === 'connecting' && (
-                      <Loader2 className="h-4 w-4 text-primary animate-spin" />
+      {/* Step 1: Connect to Server */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">Step 1</Badge>
+          <h3 className="font-medium">Connect to an MCP Server</h3>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {mcpServers.map((server) => {
+            const Icon = server.icon
+            const isSelected = selectedServer === server.id
+            const isConnected = isSelected && connectionStatus === 'connected'
+            return (
+              <Card
+                key={server.id}
+                className={`p-3 cursor-pointer transition-all ${
+                  isSelected ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-muted/50'
+                }`}
+                onClick={() => !isSelected && connectToServer(server.id)}
+              >
+                <div className="flex flex-col items-center text-center gap-2">
+                  <div className={`p-2 rounded-full ${isSelected ? 'bg-primary/20' : 'bg-muted'}`}>
+                    {connectionStatus === 'connecting' && isSelected ? (
+                      <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                    ) : isConnected ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <Icon className={`h-5 w-5 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
                     )}
                   </div>
-                </Card>
-              )
-            })}
-          </div>
-          {selectedServer && (
-            <Button variant="outline" size="sm" onClick={disconnect} className="w-full">
-              <XCircle className="h-3 w-3 mr-1" />
-              Disconnect
-            </Button>
-          )}
+                  <div>
+                    <p className="text-xs font-medium truncate max-w-full">{server.name.split('/')[1]}</p>
+                    <p className="text-xs text-muted-foreground">{server.description}</p>
+                  </div>
+                </div>
+              </Card>
+            )
+          })}
         </div>
+        {selectedServer && (
+          <Button variant="outline" size="sm" onClick={disconnect}>
+            <XCircle className="h-3 w-3 mr-1" />
+            Disconnect
+          </Button>
+        )}
+      </div>
 
-        {/* Discovered Tools */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-medium">Discovered Tools</h3>
-            {connectionStatus === 'connected' && (
-              <Badge variant="secondary" className="text-xs">
-                {discoveredTools.length} tools
-              </Badge>
-            )}
+      {/* Setup Guide */}
+      {setupGuide && (
+        <Card className="p-4 bg-amber-500/10 border-amber-500/20">
+          <div className="flex items-start gap-3">
+            <Info className="h-5 w-5 text-amber-500 mt-0.5" />
+            <div>
+              <h4 className="font-medium text-sm mb-2">Real Setup Instructions</h4>
+              <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>{setupGuide.step1}</li>
+                <li>{setupGuide.step2}</li>
+                <li>{setupGuide.step3}</li>
+              </ol>
+            </div>
           </div>
-          <Card className="p-4 min-h-[300px]">
-            {connectionStatus === 'idle' && (
-              <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                <Search className="h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  Select an MCP server to discover tools
-                </p>
-              </div>
-            )}
-            {connectionStatus === 'connecting' && (
-              <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                <Loader2 className="h-8 w-8 text-primary animate-spin mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  Connecting to {selectedServerData?.name}...
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Discovering available tools
-                </p>
-              </div>
-            )}
-            {connectionStatus === 'connected' && (
+        </Card>
+      )}
+
+      {/* Step 2: Discovered Tools */}
+      {connectionStatus === 'connected' && discoveredTools.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">Step 2</Badge>
+            <h3 className="font-medium">Discovered Tools</h3>
+            <Badge variant="secondary" className="text-xs">{discoveredTools.length} tools</Badge>
+          </div>
+          <div className="grid md:grid-cols-2 gap-2">
+            {discoveredTools.map((tool) => (
+              <Card
+                key={tool.name}
+                className={`p-3 cursor-pointer transition-all ${
+                  selectedTool?.name === tool.name ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-muted/50'
+                }`}
+                onClick={() => selectTool(tool)}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Wrench className="h-3 w-3 text-primary" />
+                  <code className="text-sm font-medium text-primary">{tool.name}</code>
+                </div>
+                <p className="text-xs text-muted-foreground">{tool.description}</p>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Execute Tool */}
+      {selectedTool && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">Step 3</Badge>
+            <h3 className="font-medium">Execute: {selectedTool.name}</h3>
+          </div>
+          <Card className="p-4">
+            <div className="space-y-4">
+              {/* Tool parameters */}
               <div className="space-y-3">
-                {discoveredTools.map((tool) => (
-                  <div key={tool.name} className="p-3 rounded bg-muted/50">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Wrench className="h-3 w-3 text-primary" />
-                      <code className="text-sm font-medium text-primary">{tool.name}</code>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-2">{tool.description}</p>
-                    {tool.params.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {tool.params.map(param => (
-                          <Badge key={param} variant="outline" className="text-xs">
-                            {param}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
+                {Object.entries(selectedTool.inputSchema.properties || {}).map(([key, prop]) => (
+                  <div key={key}>
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      {key}
+                      {selectedTool.inputSchema.required?.includes(key) && (
+                        <Badge variant="destructive" className="text-xs">required</Badge>
+                      )}
+                    </label>
+                    <Input
+                      placeholder={prop.description || key}
+                      value={toolArgs[key] || ''}
+                      onChange={(e) => setToolArgs({ ...toolArgs, [key]: e.target.value })}
+                      className="mt-1"
+                    />
                   </div>
                 ))}
               </div>
-            )}
-            {connectionStatus === 'error' && (
-              <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                <XCircle className="h-8 w-8 text-red-500 mb-2" />
-                <p className="text-sm text-red-500">Connection failed</p>
-              </div>
-            )}
+
+              <Button onClick={executeTool} disabled={isExecuting} className="w-full">
+                {isExecuting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Executing...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Execute Tool
+                  </>
+                )}
+              </Button>
+
+              {/* Execution Result */}
+              {executionResult && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Result</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {executionResult.executionTime}ms
+                    </Badge>
+                  </div>
+                  <Card className="p-3 bg-zinc-950">
+                    <pre className="text-xs text-green-400 overflow-auto max-h-40">
+                      {JSON.stringify(executionResult.result, null, 2)}
+                    </pre>
+                  </Card>
+                </div>
+              )}
+            </div>
           </Card>
         </div>
-      </div>
+      )}
+
+      {/* Code Example */}
+      {selectedServer && connectionStatus === 'connected' && (
+        <Card className="p-4 bg-zinc-950">
+          <div className="flex items-center gap-2 mb-3">
+            <Terminal className="h-4 w-4 text-zinc-400" />
+            <span className="text-sm font-medium text-zinc-300">Generated Code</span>
+          </div>
+          <pre className="text-xs text-zinc-300 overflow-auto">
+{`import { experimental_createMCPClient } from 'ai'
+
+const client = await experimental_createMCPClient({
+  transport: {
+    type: 'stdio',
+    command: 'npx',
+    args: ['-y', '${selectedServerData?.name}'],
+  },
+})
+
+const tools = await client.tools()
+// Discovered ${discoveredTools.length} tools: ${discoveredTools.map(t => t.name).join(', ')}
+${selectedTool ? `
+// Execute ${selectedTool.name}
+const result = await generateText({
+  model,
+  tools,
+  prompt: 'Use ${selectedTool.name} to...',
+})` : ''}`}
+          </pre>
+        </Card>
+      )}
 
       <a
         href="https://modelcontextprotocol.io"
